@@ -2,9 +2,11 @@
 
 import torch.nn as nn
 import torchvision.models as tvmodels
+from torchvision.models import ViT_B_16_Weights
+from transformers import ViTForImageClassification
 
 
-__all__ = ["mobilenet_v3_small", "vgg16"]
+__all__ = ["mobilenet_v3_small", "vgg16", "vit_b_16", "ViT"]
 
 
 class TorchVisionModel(nn.Module):
@@ -13,12 +15,17 @@ class TorchVisionModel(nn.Module):
 
         self.loss = loss
         self.backbone = tvmodels.__dict__[name](pretrained=pretrained)
-        self.feature_dim = self.backbone.classifier[0].in_features
+        if name == "vit_b_16":
+            self.feature_dim = self.backbone.heads.in_features
+            self.backbone.classifier = nn.Identity()
+            self.classifier = nn.Linear(self.feature_dim, num_classes)
 
         # overwrite the classifier used for ImageNet pretrianing
         # nn.Identity() will do nothing, it's just a place-holder
-        self.backbone.classifier = nn.Identity()
-        self.classifier = nn.Linear(self.feature_dim, num_classes)
+        else:
+            self.feature_dim = self.backbone.classifier[0].in_features
+            self.backbone.classifier = nn.Identity()
+            self.classifier = nn.Linear(self.feature_dim, num_classes)
 
     def forward(self, x):
         v = self.backbone(x)
@@ -60,3 +67,18 @@ def mobilenet_v3_small(num_classes, loss={"xent"}, pretrained=True, **kwargs):
 
 # Define any models supported by torchvision bellow
 # https://pytorch.org/vision/0.11/models.html
+
+def vit_b_16(num_classes, loss = {"xent"}, pretrained=True, **kwargs):
+    model = TorchVisionModel(
+        "vit_b_16",
+        num_classes=num_classes,
+        loss = loss,
+        pretrained=pretrained,
+        **kwargs,  
+    )
+    return model
+
+def ViT(num_classes, loss={"xent"}, pretrained=True, **kwargs):
+    model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
+    model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+    return model
