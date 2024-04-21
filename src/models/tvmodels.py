@@ -12,7 +12,6 @@ class TorchVisionModel(nn.Module):
     def __init__(self, name, num_classes, loss, pretrained, **kwargs):
         super().__init__()
         self.loss = loss
-        # Check if it is one of the transformer models
         self.is_transformer = name in ["vit_b_16", "ViT"]  
         if self.is_transformer:
             self.backbone = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
@@ -26,12 +25,12 @@ class TorchVisionModel(nn.Module):
             self.classifier = nn.Linear(self.feature_dim, num_classes)
 
     def forward(self, x):
-        features = self.backbone(x)
-
         if self.is_transformer:
-            # Ensure you extract the correct features for transformers, 
-            # usually the CLS token or as structured by your specific model's output
-            features = features.last_hidden_state[:, 0, :] 
+            outputs = self.backbone(x)
+            # Extract features directly from the logits (as we've set the original classifier to Identity)
+            features = outputs.logits
+        else:
+            features = self.backbone(x)
 
         if not self.training:
             return features  # Return features directly during evaluation
@@ -43,6 +42,7 @@ class TorchVisionModel(nn.Module):
             return logits, features
         else:
             raise KeyError(f"Unsupported loss: {self.loss}")
+
 
 
 
