@@ -12,36 +12,36 @@ __all__ = ["mobilenet_v3_small", "vgg16", "vit_b_16", "ViT"]
 class TorchVisionModel(nn.Module):
     def __init__(self, name, num_classes, loss, pretrained, **kwargs):
         super().__init__()
-
         self.loss = loss
-        self.backbone = tvmodels.__dict__[name](pretrained=pretrained)
-        if name == "vit_b_16":
-            self.feature_dim = self.backbone.heads.in_features
-            #self.feature_dim = self.backbone.classifier[0].in_features
-            self.backbone.classifier = nn.Identity()
+        self.is_transformer = (name == "vit_b_16")  # Check if it is a transformer model
+        if self.is_transformer:
+            self.backbone = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
+            self.feature_dim = self.backbone.classifier.in_features
+            self.backbone.classifier = nn.Identity()  # Replace classifier for feature extraction
             self.classifier = nn.Linear(self.feature_dim, num_classes)
-
-        # overwrite the classifier used for ImageNet pretrianing
-        # nn.Identity() will do nothing, it's just a place-holder
         else:
+            self.backbone = tvmodels.__dict__[name](pretrained=pretrained)
             self.feature_dim = self.backbone.classifier[0].in_features
             self.backbone.classifier = nn.Identity()
             self.classifier = nn.Linear(self.feature_dim, num_classes)
 
     def forward(self, x):
-        v = self.backbone(x)
+        features = self.backbone(x)
+
+        if self.is_transformer:
+            features = features.last_hidden_state[:, 0, :]  # Extract the CLS token's features for transformers
 
         if not self.training:
-            return v
+            return features  # Return features directly during evaluation
 
-        y = self.classifier(v)
-
+        logits = self.classifier(features)
         if self.loss == {"xent"}:
-            return y
+            return logits
         elif self.loss == {"xent", "htri"}:
-            return y, v
+            return logits, features
         else:
             raise KeyError(f"Unsupported loss: {self.loss}")
+
 
 
 def vgg16(num_classes, loss={"xent"}, pretrained=True, **kwargs):
