@@ -8,12 +8,12 @@ from transformers import ViTForImageClassification
 
 __all__ = ["mobilenet_v3_small", "vgg16", "vit_b_16", "ViT"]
 
-
 class TorchVisionModel(nn.Module):
     def __init__(self, name, num_classes, loss, pretrained, **kwargs):
         super().__init__()
         self.loss = loss
-        self.is_transformer = (name == "vit_b_16")  # Check if it is a transformer model
+        # Check if it is one of the transformer models
+        self.is_transformer = name in ["vit_b_16", "ViT"]  
         if self.is_transformer:
             self.backbone = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
             self.feature_dim = self.backbone.classifier.in_features
@@ -29,7 +29,9 @@ class TorchVisionModel(nn.Module):
         features = self.backbone(x)
 
         if self.is_transformer:
-            features = features.last_hidden_state[:, 0, :]  # Extract the CLS token's features for transformers
+            # Ensure you extract the correct features for transformers, 
+            # usually the CLS token or as structured by your specific model's output
+            features = features.last_hidden_state[:, 0, :] 
 
         if not self.training:
             return features  # Return features directly during evaluation
